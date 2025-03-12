@@ -1,0 +1,3 @@
+- name: Install dependencies
+  working-directory: ./day6  # Change to correct folder
+  run: conda env update --file environment.yml --name base
