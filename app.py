@@ -7,7 +7,7 @@ import json
 from pymongo import MongoClient
 
 app = Flask(__name__)
-app.secret_key = "your_secret_key"  # Required for flashing messages
+
 
 # Configure logging
 logging.basicConfig(
