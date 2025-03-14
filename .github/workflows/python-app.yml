@@ -64,35 +64,47 @@ jobs:
           echo "$PRIVATE_KEY" > private_key.pem
           chmod 600 private_key.pem
           ssh -o StrictHostKeyChecking=no -i private_key.pem $USER@$HOST << 'EOF'
+            # Install dependencies
             sudo apt update && sudo apt install -y python3-pip python3-venv git
+
+            # Clone repo if not exists
             if [ ! -d "/home/ubuntu/my-flask-app/.git" ]; then
               git clone https://github.com/utkarshdeshmane/day6.git /home/ubuntu/my-flask-app
             fi
+
             cd /home/ubuntu/my-flask-app
             git pull origin main
+
+            # Create virtual environment if not exists
             if [ ! -d "venv" ]; then
               python3 -m venv venv
             fi
             source venv/bin/activate
             pip install --upgrade pip
             pip install -r requirements.txt
-            sudo tee /etc/systemd/system/my-flask-app.service > /dev/null <<EOT
-            [Unit]
-            Description=Gunicorn instance to serve Flask app
-            After=network.target
 
-            [Service]
-            User=ubuntu
-            Group=www-data
-            WorkingDirectory=/home/ubuntu/my-flask-app
-            Environment="PATH=/home/ubuntu/my-flask-app/venv/bin"
-            ExecStart=/home/ubuntu/my-flask-app/venv/bin/gunicorn -w 4 -b 0.0.0.0:8000 wsgi:app
+            # Fix systemd service file
+            sudo bash -c 'cat > /etc/systemd/system/my-flask-app.service <<EOT
+[Unit]
+Description=Gunicorn instance to serve Flask app
+After=network.target
 
-            [Install]
-            WantedBy=multi-user.target
-            EOT
+[Service]
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/my-flask-app
+Environment="PATH=/home/ubuntu/my-flask-app/venv/bin"
+ExecStart=/home/ubuntu/my-flask-app/venv/bin/gunicorn -w 4 -b 0.0.0.0:8000 app:app
 
+[Install]
+WantedBy=multi-user.target
+EOT'
+
+            # Reload and restart service
             sudo systemctl daemon-reload
             sudo systemctl enable my-flask-app
             sudo systemctl restart my-flask-app
+
+            # Ensure firewall allows traffic
+            sudo ufw allow 8000 || true
           EOF
