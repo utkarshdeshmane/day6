@@ -26,7 +26,6 @@ collection = db["products"]  # Collection name
 def home():
     output = []
     chart_json = None
-    print(2)
     if request.method == 'POST':
         try:
             data = request.form['url']
