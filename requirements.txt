@@ -1,5 +1,4 @@
-Flask
-gunicorn
-requests
-pymongo
-plotly
+Flask==3.1.0
+plotly==6.0.0
+pymongo==4.11.2
+Requests==2.32.3
