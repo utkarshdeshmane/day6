@@ -63,7 +63,7 @@ jobs:
           HOST: ${{ secrets.EC2_HOST }}
           USER: ${{ secrets.EC2_USER }}
         run: |
-          echo "$PRIVATE_KEY" > private_key.pem
+          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" | tr -d '\r' > private_key.pem
           chmod 600 private_key.pem
           ssh -o StrictHostKeyChecking=no -i private_key.pem $USER@$HOST << 'EOF'
           # Install dependencies if missing
@@ -89,7 +89,7 @@ jobs:
           # Create systemd service file
           cat <<EOT | sudo tee /etc/systemd/system/my-flask-app.service
           [Unit]
-          Description=Gunicorn instance to serve Flask app
+          Description=Flask App Service
           After=network.target
 
           [Service]
@@ -97,7 +97,7 @@ jobs:
           Group=www-data
           WorkingDirectory=/home/ubuntu/my-flask-app
           Environment="PATH=/home/ubuntu/my-flask-app/venv/bin"
-          ExecStart=/home/ubuntu/my-flask-app/venv/bin/gunicorn -w 4 -b 0.0.0.0:8000 app:app
+          ExecStart=/home/ubuntu/my-flask-app/venv/bin/python app.py
 
           [Install]
           WantedBy=multi-user.target
