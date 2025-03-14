@@ -11,7 +11,8 @@ class FlaskAppTestCase(unittest.TestCase):
 
     @patch('app.collection.find_one')
     def test_home_route_get(self, mock_find_one):
-        response = self.app.get('/')
+        headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+        response = self.app.get('/', headers=headers)
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'Ajio Price Tracker', response.data)  # Adjust based on actual HTML content
 
@@ -27,15 +28,27 @@ class FlaskAppTestCase(unittest.TestCase):
                                           'priceData': {'value': 500}}]}],
             'potentialPromotions': [{'maxSavingPrice': 50}]
         }
-        
-        response = self.app.post('/', data={'url': 'https://www.ajio.com/test-product'}, follow_redirects=True)
+
+        headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+        response = self.app.post(
+            '/',
+            data={'url': 'https://www.ajio.com/test-product'},
+            headers=headers,
+            follow_redirects=True
+        )
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'Test Product', response.data)
         self.assertIn(b'500', response.data)
-        
+
     @patch('app.requests.get', side_effect=Exception("API error"))
     def test_api_failure(self, mock_requests_get):
-        response = self.app.post('/', data={'url': 'https://www.ajio.com/test-product'}, follow_redirects=True)
+        headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+        response = self.app.post(
+            '/',
+            data={'url': 'https://www.ajio.com/test-product'},
+            headers=headers,
+            follow_redirects=True
+        )
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'An unexpected error occurred', response.data)
 
