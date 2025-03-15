@@ -18,7 +18,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.10"
+          python-version: "3.12"
 
       - name: Install dependencies
         run: |
@@ -66,6 +66,7 @@ jobs:
           echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" | tr -d '\r' > private_key.pem
           chmod 600 private_key.pem
           ssh -o StrictHostKeyChecking=no -i private_key.pem $USER@$HOST << 'EOF'
+          
           # Install dependencies if missing
           sudo apt update && sudo apt install -y python3-pip python3-venv git nginx
 
@@ -86,6 +87,9 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
+          # Kill any existing Flask process on port 8000
+          sudo fuser -k 8000/tcp || true
+
           # Create systemd service file
           cat <<EOT | sudo tee /etc/systemd/system/my-flask-app.service
           [Unit]
@@ -97,7 +101,7 @@ jobs:
           Group=www-data
           WorkingDirectory=/home/ubuntu/my-flask-app
           Environment="PATH=/home/ubuntu/my-flask-app/venv/bin"
-          ExecStart=/home/ubuntu/my-flask-app/venv/bin/python app.py
+          ExecStart=/home/ubuntu/my-flask-app/venv/bin/python -m flask run --host=0.0.0.0 --port=8000
 
           [Install]
           WantedBy=multi-user.target
@@ -125,5 +129,6 @@ jobs:
           EOT
 
           sudo ln -sf /etc/nginx/sites-available/my-flask-app /etc/nginx/sites-enabled/
+          sudo nginx -t
           sudo systemctl restart nginx
           EOF
