@@ -29,7 +29,7 @@ def home():
     if request.method == 'POST':
         try:
             data = request.form['url']
-            print(1)
+            print(2)
             headers = {"User-Agent": "Mozilla/5.0"}
             product_urls = [url.strip() for url in data.split(',')]
             logging.debug("URL(s) loaded successfully")

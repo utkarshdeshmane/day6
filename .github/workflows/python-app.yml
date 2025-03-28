@@ -1,4 +1,4 @@
-name: Deploy Flask App to EC2
+name: Deploy Flask App to EC2    #CI
 
 on:
   push:
