@@ -2,10 +2,22 @@ version: '3'
 
 services:
   flask_app:
+    image: utkarshdeshmane/flask-app:latest
+    container_name: flask_app
+    restart: always
     build: .
     ports:
-      - "80:80" 
-    volumes:
-      - .:/app
+      - "8000:8000"
     environment:
-      - FLASK_ENV=development
+      - FLASK_ENV=production
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - flask_app

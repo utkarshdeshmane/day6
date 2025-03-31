@@ -1,4 +1,4 @@
-name: Deploy Flask App to EC2    # CI/CD
+name: Deploy Flask App with Docker and EC2
 
 on:
   push:
@@ -15,44 +15,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
         with:
-          python-version: "3.12"
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Install dependencies
+      - name: Build and Push Docker Image
         run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
-  lint:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install flake8
-      - name: Run linting
-        run: |
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-
-  test:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pytest
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          docker build -t utkarshdeshmane/flask-app:latest .
+          docker push utkarshdeshmane/flask-app:latest
 
   deploy:
     runs-on: ubuntu-latest
-    needs: test
+    needs: build
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -63,77 +42,33 @@ jobs:
           HOST: ${{ secrets.EC2_HOST }}
           USER: ${{ secrets.EC2_USER }}
         run: |
-          # Save the SSH private key and set correct permissions
+          # Save private key and set permissions
           echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" | tr -d '\r' > private_key.pem
           chmod 600 private_key.pem
 
-          # Connect to EC2 and deploy the app
+          # Connect to EC2 and deploy
           ssh -o StrictHostKeyChecking=no -i private_key.pem $USER@$HOST << 'EOF'
 
           # Update system and install dependencies if missing
-          sudo apt update && sudo apt install -y python3-pip python3-venv git nginx
+          sudo apt update && sudo apt install -y docker.io docker-compose nginx
 
-          # Clone or pull the latest code
-          if [ ! -d "/home/ubuntu/my-flask-app/.git" ]; then
-            git clone https://github.com/utkarshdeshmane/day6.git /home/ubuntu/my-flask-app
-          fi
+          # Restart Docker service if necessary
+          sudo systemctl restart docker || true
 
+          # Pull the latest image from Docker Hub
+          sudo docker pull utkarshdeshmane/flask-app:latest
+
+          # Stop and remove any running containers
+          sudo docker-compose -f /home/ubuntu/my-flask-app/docker-compose.yml down || true
+
+          # Ensure correct permissions for docker-compose.yml
+          sudo chown ubuntu:ubuntu /home/ubuntu/my-flask-app/docker-compose.yml
+
+          # Start new containers with Docker Compose
           cd /home/ubuntu/my-flask-app
-          git pull origin main
+          sudo docker-compose -f docker-compose.yml up -d --build
 
-          # Set up virtual environment and install dependencies
-          if [ ! -d "venv" ]; then
-            python3 -m venv venv
-          fi
-          
-          source venv/bin/activate
-          pip install --upgrade pip
-          pip install -r requirements.txt
-
-          # Stop any running Flask process on port 8000
-          sudo fuser -k 8000/tcp || true
-
-          # Create and configure systemd service for Flask
-          sudo tee /etc/systemd/system/my-flask-app.service > /dev/null <<EOT
-          [Unit]
-          Description=Flask App Service
-          After=network.target
-
-          [Service]
-          User=ubuntu
-          Group=www-data
-          WorkingDirectory=/home/ubuntu/my-flask-app
-          Environment="PATH=/home/ubuntu/my-flask-app/venv/bin"
-          ExecStart=/home/ubuntu/my-flask-app/venv/bin/python -m flask run --host=0.0.0.0 --port=8000
-
-          [Install]
-          WantedBy=multi-user.target
-          EOT
-
-          # Enable and restart Flask systemd service
-          sudo systemctl daemon-reload
-          sudo systemctl enable my-flask-app
-          sudo systemctl restart my-flask-app
-
-          # Configure Nginx reverse proxy
-          sudo rm -f /etc/nginx/sites-enabled/default
-          sudo tee /etc/nginx/sites-available/my-flask-app > /dev/null <<EOT
-          server {
-              listen 80;
-              server_name _;
-
-              location / {
-                  proxy_pass http://127.0.0.1:8000;
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto \$scheme;
-              }
-          }
-          EOT
-
-          # Enable and restart Nginx
-          sudo ln -s /etc/nginx/sites-available/my-flask-app /etc/nginx/sites-enabled
-          sudo systemctl restart nginx
+          # Clean up old Docker images
+          sudo docker system prune -f
 
           EOF
