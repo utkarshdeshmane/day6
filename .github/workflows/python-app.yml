@@ -1,21 +1,51 @@
-# Use lightweight Python image
-FROM python:3.12-slim
+name: Deploy Flask App with Docker and EC2
 
-# Set environment variables
-ENV PYTHONUNBUFFERED 1
+on:
+  push:
+    branches:
+      - main
 
-# Set working directory
-WORKDIR /app
+permissions:
+  contents: read
 
-# Copy requirements and install dependencies
-COPY requirements.txt /app/
-RUN pip install --upgrade pip && pip install -r requirements.txt
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-# Copy application code
-COPY . /app/
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-# Expose port 5000
-EXPOSE 5000
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-# Run Flask application
-CMD ["python", "app.py"]
+      - name: Build and Push Docker Image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/flask-app:latest .
+          docker push ${{ secrets.DOCKER_USERNAME }}/flask-app:latest
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Connect to EC2 and Deploy App
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_PRIVATE_KEY }}
+          script: |
+            # Stop existing container if running
+            docker stop flask-app || true
+            docker rm flask-app || true
+
+            # Pull the latest Docker image
+            docker pull ${{ secrets.DOCKER_USERNAME }}/flask-app:latest
+
+            # Run new container
+            docker run -d -p 8000:8000 --name flask-app ${{ secrets.DOCKER_USERNAME }}/flask-app:latest
