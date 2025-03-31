@@ -26,7 +26,11 @@ jobs:
 
       - name: Build and Push Docker Image
         run: |
-          docker build -t utkarshdeshmane/flask-app:latest .
+          docker buildx build \
+            --platform linux/amd64 \
+            --cache-from=type=registry,ref=utkarshdeshmane/flask-app:latest \
+            --cache-to=type=inline \
+            -t utkarshdeshmane/flask-app:latest .
           docker push utkarshdeshmane/flask-app:latest
 
   deploy:
@@ -49,26 +53,35 @@ jobs:
           # Connect to EC2 and deploy
           ssh -o StrictHostKeyChecking=no -i private_key.pem $USER@$HOST << 'EOF'
 
-          # Update system and install dependencies if missing
+          # --- System Update & Docker Setup ---
           sudo apt update && sudo apt install -y docker.io docker-compose nginx
 
-          # Restart Docker service if necessary
-          sudo systemctl restart docker || true
+          # Restart Docker if inactive
+          if ! systemctl is-active --quiet docker; then
+            sudo systemctl restart docker
+          fi
 
-          # Pull the latest image from Docker Hub
+          # --- Pull Latest Docker Image ---
           sudo docker pull utkarshdeshmane/flask-app:latest
 
-          # Stop and remove any running containers
-          sudo docker-compose -f /home/ubuntu/my-flask-app/docker-compose.yml down || true
+          # --- Stop and Remove Existing Containers ---
+          sudo docker compose -f /home/ubuntu/my-flask-app/docker-compose.yml down || true
 
-          # Ensure correct permissions for docker-compose.yml
-          sudo chown ubuntu:ubuntu /home/ubuntu/my-flask-app/docker-compose.yml
+          # --- Ensure Correct Permissions ---
+          sudo chown -R ubuntu:ubuntu /home/ubuntu/my-flask-app
 
-          # Start new containers with Docker Compose
+          # --- Start New Containers ---
           cd /home/ubuntu/my-flask-app
-          sudo docker-compose -f docker-compose.yml up -d --build
+          sudo docker compose -f docker-compose.yml up -d --build
 
-          # Clean up old Docker images
-          sudo docker system prune -f
+          # --- Clean Up Old Images ---
+          sudo docker image prune -f
+
+          # --- Check and Reload Nginx Configuration ---
+          if sudo nginx -t; then
+            sudo systemctl reload nginx
+          else
+            echo "❌ Nginx config error, skipping reload."
+          fi
 
           EOF
