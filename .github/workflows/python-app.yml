@@ -1,4 +1,4 @@
-name: Deploy Flask App to EC2    #CI
+name: Deploy Flask App to EC2    # CI/CD
 
 on:
   push:
@@ -63,14 +63,17 @@ jobs:
           HOST: ${{ secrets.EC2_HOST }}
           USER: ${{ secrets.EC2_USER }}
         run: |
+          # Save the SSH private key and set correct permissions
           echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" | tr -d '\r' > private_key.pem
           chmod 600 private_key.pem
+
+          # Connect to EC2 and deploy the app
           ssh -o StrictHostKeyChecking=no -i private_key.pem $USER@$HOST << 'EOF'
-          
-          # Install dependencies if missing
+
+          # Update system and install dependencies if missing
           sudo apt update && sudo apt install -y python3-pip python3-venv git nginx
 
-          # Clone repo if not present
+          # Clone or pull the latest code
           if [ ! -d "/home/ubuntu/my-flask-app/.git" ]; then
             git clone https://github.com/utkarshdeshmane/day6.git /home/ubuntu/my-flask-app
           fi
@@ -78,20 +81,20 @@ jobs:
           cd /home/ubuntu/my-flask-app
           git pull origin main
 
-          # Set up virtual environment
+          # Set up virtual environment and install dependencies
           if [ ! -d "venv" ]; then
             python3 -m venv venv
           fi
-
+          
           source venv/bin/activate
           pip install --upgrade pip
           pip install -r requirements.txt
 
-          # Kill any existing Flask process on port 8000
+          # Stop any running Flask process on port 8000
           sudo fuser -k 8000/tcp || true
 
-          # Create systemd service file
-          cat <<EOT | sudo tee /etc/systemd/system/my-flask-app.service
+          # Create and configure systemd service for Flask
+          sudo tee /etc/systemd/system/my-flask-app.service > /dev/null <<EOT
           [Unit]
           Description=Flask App Service
           After=network.target
@@ -107,11 +110,14 @@ jobs:
           WantedBy=multi-user.target
           EOT
 
+          # Enable and restart Flask systemd service
           sudo systemctl daemon-reload
           sudo systemctl enable my-flask-app
-          sudo systemctl restart my-flask-app 
+          sudo systemctl restart my-flask-app
+
+          # Configure Nginx reverse proxy
           sudo rm -f /etc/nginx/sites-enabled/default
-          cat <<EOT | sudo tee /etc/nginx/sites-available/my-flask-app
+          sudo tee /etc/nginx/sites-available/my-flask-app > /dev/null <<EOT
           server {
               listen 80;
               server_name _;
@@ -125,3 +131,9 @@ jobs:
               }
           }
           EOT
+
+          # Enable and restart Nginx
+          sudo ln -s /etc/nginx/sites-available/my-flask-app /etc/nginx/sites-enabled
+          sudo systemctl restart nginx
+
+          EOF
