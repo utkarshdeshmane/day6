@@ -69,6 +69,7 @@ def home():
         except Exception as e:
             logging.error(f"An unexpected error occurred: {e}")
             flash("An unexpected error occurred. Please try again.")
+            print(e)
             return redirect(url_for('home'))
         
         if output:
