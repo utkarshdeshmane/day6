@@ -48,4 +48,4 @@ jobs:
             docker pull ${{ secrets.DOCKER_USERNAME }}/flask-app:latest
 
             # Run new container
-            docker run -d -p 8000:000 --name flask-app ${{ secrets.DOCKER_USERNAME }}/flask-app:latest
+            docker run -d -p 8000:8000 --name flask-app ${{ secrets.DOCKER_USERNAME }}/flask-app:latest
