@@ -64,7 +64,6 @@ def home():
         
         except requests.exceptions.ConnectionError:
             logging.error("Connection error. Please check your internet connection.")
-            print("Connection error. Please check your internet connection.")
             flash("Connection error. Please check your internet connection.")
             return redirect(url_for('home'))
         except Exception as e:
