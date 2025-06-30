@@ -19,5 +19,3 @@ EXPOSE 5000
 
 # Run Flask application
 CMD ["python", "app.py"]
-# Use lightweight Nginx image
-FROM nginx:alpine   
